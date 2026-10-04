@@ -158,20 +158,116 @@ tail(0.65);
 
 scene.add(car);
 
-// Traffic cars
-const traffic=[];
-for(let i=0;i<9;i++) {
-const group=new THREE.Group();
-const colors=[0xff3333,0xffcc22,0xffffff,0x222222,0x22bb88];
-const b=cube(2,0.8,4,colors[i%5],0,0.7,0);
-group.add(b);
-const r=cube(1.5,0.6,1.8,0x333333,0,1.35,-0.2);
-group.add(r);
-group.position.set([-4,0,4][i%3],0,-25-i*17);
-scene.add(group);
-traffic.push(group);
+// 🚦 TRAFFIC SYSTEM
+const traffic = [];
+
+const trafficColors = [
+  0xff3333, // Red
+  0xffffff, // White
+  0x222222, // Black
+  0xffcc22, // Yellow
+  0x22bb88, // Green
+  0x8844ff  // Purple
+];
+
+const lanes = [-4, 0, 4];
+
+function createTrafficCar(i) {
+
+  const vehicle = new THREE.Group();
+
+  // Body
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.7, 4),
+    new THREE.MeshStandardMaterial({
+      color: trafficColors[i % trafficColors.length]
+    })
+  );
+
+  body.position.y = 0.7;
+  vehicle.add(body);
+
+  // Cabin
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.7, 1.8),
+    new THREE.MeshStandardMaterial({
+      color: 0x202733,
+      roughness: 0.3,
+      metalness: 0.3
+    })
+  );
+
+  cabin.position.set(0, 1.2, 0);
+  vehicle.add(cabin);
+
+  // Wheels
+  function addWheel(x, z) {
+
+    const wheel = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        0.4,
+        0.4,
+        0.3,
+        16
+      ),
+      new THREE.MeshStandardMaterial({
+        color: 0x111111
+      })
+    );
+
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, 0.4, z);
+
+    vehicle.add(wheel);
+  }
+
+  addWheel(-1.1, -1.3);
+  addWheel(1.1, -1.3);
+  addWheel(-1.1, 1.3);
+  addWheel(1.1, 1.3);
+
+  // Headlights
+  function addLight(x) {
+
+    const light = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.18, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffcc,
+        emissive: 0xffffaa,
+        emissiveIntensity: 1.5
+      })
+    );
+
+    light.position.set(x, 0.9, -2.03);
+    vehicle.add(light);
+  }
+
+  addLight(-0.65);
+  addLight(0.65);
+
+  // Random lane
+  vehicle.position.x =
+    lanes[Math.floor(Math.random() * lanes.length)];
+
+  vehicle.position.y = 0;
+  vehicle.position.z = -30 - i * 18;
+
+  // Individual speed
+  vehicle.userData.speed =
+    0.35 + Math.random() * 0.45;
+
+  vehicle.userData.targetLane =
+    vehicle.position.x;
+
+  scene.add(vehicle);
+  traffic.push(vehicle);
 }
 
+
+// Create 12 traffic vehicles
+for (let i = 0; i < 12; i++) {
+  createTrafficCar(i);
+}
 let steer=0, speed=0.5, score=0, crashed=false;
 function hold(id,down,up) {
 const b=document.getElementById(id);
@@ -191,23 +287,57 @@ if(!crashed) {
 car.position.x+=steer*0.13;
 car.position.x=Math.max(-5,Math.min(5,car.position.x));
 
-traffic.forEach(t=>{
-t.position.z+=speed;
-if(t.position.z>12) {
-t.position.z=-140-Math.random()*40;
-t.position.x=[-4,0,4][Math.floor(Math.random()*3)];
-score++;
-document.getElementById('score').textContent=score;
-}
-if(Math.abs(t.position.z-car.position.z)<3.3 &&
-Math.abs(t.position.x-car.position.x)<1.8) {
-crashed=true;
-document.getElementById('ui').innerHTML=
-"💥 CRASH!<br>Score: "+score+
-'<br><button onclick="location.reload()">Restart</button>';
-}
+traffic.forEach(t => {
+
+  // Move vehicle
+  t.position.z += t.userData.speed;
+
+  // Small random lane change
+  if (Math.random() < 0.002) {
+
+    t.userData.targetLane =
+      lanes[Math.floor(Math.random() * lanes.length)];
+  }
+
+  // Smooth lane movement
+  t.position.x +=
+    (t.userData.targetLane - t.position.x) * 0.01;
+
+  // Vehicle passed player
+  if (t.position.z > 15) {
+
+    t.position.z =
+      -180 - Math.random() * 80;
+
+    t.position.x =
+      lanes[Math.floor(Math.random() * lanes.length)];
+
+    t.userData.targetLane = t.position.x;
+
+    t.userData.speed =
+      0.35 + Math.random() * 0.45;
+
+    score++;
+
+    document.getElementById("score").textContent =
+      score;
+  }
+
+  // Collision detection
+  if (
+    Math.abs(t.position.z - car.position.z) < 3.2 &&
+    Math.abs(t.position.x - car.position.x) < 1.8
+  ) {
+
+    crashed = true;
+
+    document.getElementById("ui").innerHTML =
+      "💥 CRASH!<br>" +
+      "Score: " + score +
+      '<br><button onclick="location.reload()">Restart</button>';
+  }
+
 });
-}
 camera.position.x+=(car.position.x-camera.position.x)*0.06;
 camera.lookAt(car.position.x,0,-10);
 renderer.render(scene,camera);
